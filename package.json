@@ -1,0 +1,43 @@
+{
+  "name": "bugbot",
+  "version": "0.1.0",
+  "description": "BugBot – a Discord.js v14 bot that turns raw Discord bug reports into polished, AI-assisted reports and builds auto-filled links to Discord's bug report site.",
+  "main": "dist/bot.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/bot.js",
+    "dev": "node dist/bot.js",
+    "register-commands": "node dist/registerCommands.js",
+    "scrape": "node dist/scripts/scrapeDiscordForums.js",
+    "sync-articles": "node dist/scripts/syncSupportArticles.js",
+    "lint": "eslint \"src/**/*.{ts,tsx}\""
+  },
+  "keywords": [
+    "discord",
+    "discord-bot",
+    "discord.js",
+    "bug-report",
+    "ai",
+    "ollama",
+    "openai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "axios": "^1.7.7",
+    "cheerio": "^1.0.0-rc.12",
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "openai": "^4.77.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
+    "jiti": "^2.6.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.48.1"
+  }
+}
