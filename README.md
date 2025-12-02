@@ -52,4 +52,5 @@ You might as yourself how does the AI work:
 
 - When a user submits raw input, BugBot transforms it into a professional bug report format automatically.
 
+<img width="1024" height="1024" alt="BCO 468acd37-425d-4b9f-8d78-90ac6eb63e5f" src="https://github.com/user-attachments/assets/e3b9d6d1-1740-483d-91f5-280ec734b03e" />
 
