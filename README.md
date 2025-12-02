@@ -2,9 +2,7 @@
 
 ### *Built for the Discord Buildathon 2025*
 
-<p align="center">
-  <img width="240" src="https://github.com/user-attachments/assets/e3b9d6d1-1740-483d-91f5-280ec734b03e" alt="BugBot Logo">
-</p>
+<img width="240" src="https://github.com/user-attachments/assets/e3b9d6d1-1740-483d-91f5-280ec734b03e" alt="BugBot Logo">
 
 ---
 
