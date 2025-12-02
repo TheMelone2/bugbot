@@ -1,69 +1,149 @@
-## BugBot
+# BugBot: AI-Powered Bug Reporting for Discord
 
-**AI-powered, high-quality bug reports for Discord – without leaving Discord.**
+### *Built for the Discord Buildathon 2025*
 
-BugBot turns messy bug descriptions into clean, structured reports using local AI (Ollama) or OpenAI.  
-With a single `/bugreport` command, it walks users through a focused flow in a private thread, generates a polished report, and sends them to Discord’s official bug form with everything pre-filled.
-
-### Features
-
-- **/bugreport command**: Start a guided bug reporting flow directly in Discord.
-- **Thread-based UX**: BugBot opens a private thread so the conversation stays focused and reviewable.
-- **AI-powered rewriting**: Uses **Ollama (local)** by default, with optional **OpenAI** fallback.
-- **Structured output**: Title, description, steps to reproduce, environment, severity, and component.
-- **Auto-fill link**: Generates a URL to Discord’s bug form with subject and description pre-packed.
-- **Dataset scraper**: CLI to scrape public Discord community/forum pages into a JSONL dataset for prompt tuning.
+<p align="center">
+  <img width="240" src="https://github.com/user-attachments/assets/e3b9d6d1-1740-483d-91f5-280ec734b03e" alt="BugBot Logo">
+</p>
 
 ---
 
-### 1. Prerequisites
+## Overview
 
-- Node.js 18+ (recommended)
-- A Discord account and server where you can add a bot
-- [Ollama](https://ollama.com/) installed and running (for local AI)
-- Optional: OpenAI API key (for fallback or primary cloud AI)
+BugBot is an AI-powered Discord bot that transforms messy, chaotic bug descriptions into **clean, professional, auto-submit-ready** bug reports.
+
+Reporting bugs to Discord often feels slow, painful, and unclear. BugBot fixes that.
+It guides users through a focused flow, uses AI to rewrite their report, and sends them directly to the official Discord bug form with everything pre-filled.
+
+Built by someone who has reported bugs for Discord for years, including participation in the **Discord Bug Bounty Program**, **Activities Playtesting**, and numerous internal feedback initiatives - BugBot blends real-world bug hunting experience with modern AI assistance.
 
 ---
 
-### 2. Setup
+## Why BugBot?
 
-1. **Install dependencies**
+* Easy `/bugreport` command
+* Private flow
+* AI-powered rewriting (local **Model (via Ollama)** or online **Model (via OpenAI)**)
+* Automatic steps, environment, and summary generation
+* Auto-fill link to Discord’s bug form
+* Dataset for training and tuning
+* Support-article search that works based on Discord's official documentation
+
+BugBot makes bug reporting *fast*, *accessible*, and *effective* for everyone - from everyday users to power reporters.
+
+---
+
+## How BugBot Works
+
+### 1. User Command
+
+```text
+/bugreport When I join a voice channel, my microphone disconnects after 2 minutes
+```
+
+### 2. AI Processing
+
+BugBot turns the raw text into a structured report:
+
+* **Title** - concise summary
+* **Description** - clear, rewritten explanation
+* **Steps to Reproduce** - suggested and confirmed
+* **Environment** - OS, device, app version (user-provided)
+* **Severity & Component** - automatically classified
+
+### 3. Auto-Fill Integration
+
+BugBot generates a URL to Discord’s bug form with **subject and description already filled in**.
+Just review → click Submit → done.
+
+### 4. Confirmation in Discord
+
+In a private flow or DM:
+
+```
+Bug report prepared!
+Title: Microphone disconnects after 2 minutes in voice channels
+Status: Ready to submit
+```
+
+---
+
+## Features
+
+* **/bugreport command** - Start a guided bug reporting flow
+* **Private flow UX** - Clean, focused, and reviewable
+* **AI-powered rewriting** - Ollama (local) by default, OpenAI optional
+* **Strict JSON BugReport schema** ensuring clean output
+* **Auto-fill bug form links** for fast submission
+* **Dataset** from Discord's official documentation
+* **Support article search** (zero AI cost, fully local)
+
+---
+
+## AI Training Data
+
+BugBot is trained using:
+
+* Public bug trackers
+* Public Discord forum posts
+* Synthetic (generated) bug reports
+* Community-submitted anonymized examples
+
+No private Discord data is used.
+
+---
+
+## Installation & Setup
+
+### Requirements
+
+* Node.js 18+
+* Discord bot application
+* Ollama running locally (default backend)
+* Optional OpenAI API key
+
+### Setup Steps
+
+1. Install dependencies
 
 ```bash
 npm install
 ```
 
-2. **Create your environment file**
+2. Copy environment file
 
-Copy `env.example` to `.env` and fill in the values:
+```bash
+cp env.example .env
+```
 
-- `DISCORD_TOKEN`: Your bot token from the Discord Developer Portal.
-- `DISCORD_CLIENT_ID`: Your application’s client ID.
-- `AI_BACKEND`: `ollama` (default) or `openai`.
-- `OLLAMA_BASE_URL`: Usually `http://127.0.0.1:11434`.
-- `OLLAMA_MODEL`: e.g. `llama3.1`.
-- `OPENAI_API_KEY` / `OPENAI_MODEL`: Optional, for OpenAI usage.
-- `SCRAPER_DISCORD_FORUM_URLS`: Comma-separated list of public forum URLs to scrape.
+Fill in:
 
-3. **Build the bot**
+* `DISCORD_TOKEN`
+* `DISCORD_CLIENT_ID`
+* `AI_BACKEND` (ollama or openai)
+* `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
+* (Optional) `OPENAI_API_KEY`, `OPENAI_MODEL`
+* `SCRAPER_DISCORD_FORUM_URLS`
+
+3. Build
 
 ```bash
 npm run build
 ```
 
-4. **Register slash commands**
+4. Register slash commands
 
 ```bash
-npm run build && npm run register-commands
+npm run register-commands
 ```
 
-5. **Run the bot**
+5. Start the bot
 
 ```bash
 npm start
 ```
 
-For development with hot-reload:
+For development:
 
 ```bash
 npm run dev
@@ -71,145 +151,120 @@ npm run dev
 
 ---
 
-### 3. Using `/bugreport`
+## Using `/bugreport`
 
-In any server where BugBot is installed:
-
-1. Run:
+1. In any channel, run:
 
 ```text
-/bugreport summary: When I join a voice channel, my microphone disconnects after 2 minutes
+/bugreport summary: My microphone stops working after 2 minutes in VC
 ```
 
 2. BugBot:
-   - Replies ephemerally that it’s creating a private thread.
-   - Opens a private thread in the channel and invites you.
-   - Guides you through:
-     - **Step 1**: Detailed description of what happens.
-     - **Step 2**: Steps to reproduce.
-     - **Step 3**: Environment details.
 
-3. After you answer, BugBot:
-   - Calls the AI backend (Ollama or OpenAI) to generate a structured bug report.
-   - Builds a URL to Discord’s bug form with subject + description pre-filled.
-   - Sends a rich embed in the thread with:
-     - **Title**: Bug report prepared
-     - **Summary**: AI-refined description
-     - **Status**: Ready to submit
-     - A **“Open Discord bug form”** button linking to the official page.
+   * Creates a private flow
+   * Guides you through description → steps → environment
+   * Calls the AI backend
+   * Generates the final structured report
+   * Sends an auto-filled link to the Discord bug form
+
+3. A final embed summarizes the full report.
 
 ---
 
-### 4. AI Backends (Ollama & OpenAI)
+## AI Backends (Ollama & OpenAI)
 
-BugBot supports two backends, with Ollama as the default:
+### Local (Ollama)
 
-- **Ollama (local)**  
-  - Controlled by `AI_BACKEND=ollama`.  
-  - Uses `OLLAMA_BASE_URL` and `OLLAMA_MODEL`.  
-  - Prompts are designed to output a strict JSON `BugReport` object.
+* Default backend
+* Fast and cost-free
+* Strict JSON output
 
-- **OpenAI (cloud)**  
-  - Controlled by `AI_BACKEND=openai` or as a fallback when Ollama fails.  
-  - Uses `OPENAI_API_KEY` and `OPENAI_MODEL`.  
-  - Shares the same BugReport schema and prompt style as Ollama.
+### Cloud (OpenAI)
 
-If both are configured, BugBot will:
+* Optional or fallback
+* Same structured output format
 
-- Use **Ollama first** when `AI_BACKEND=ollama`, then fall back to OpenAI on error.
-- Use **OpenAI first** when `AI_BACKEND=openai`, then fall back to Ollama on error.
+**Fallback logic:**
+
+* `AI_BACKEND=ollama`: try Ollama → fallback to OpenAI
+* `AI_BACKEND=openai`: try OpenAI → fallback to Ollama
 
 ---
 
-### 5. Dataset Scraper (Discord Forums)
+## Dataset Scraper (Discord Forums)
 
-BugBot includes a basic scraper for public Discord community/forum pages to help you build a dataset of real bug reports.
+BugBot includes a CLI scraper to gather examples from **public Discord community/forum pages**.
 
-1. Configure forum URLs in `.env`:
-
-```env
-SCRAPER_DISCORD_FORUM_URLS=https://support.discord.com/hc/en-us/community/topics/360000029731
-```
-
-2. Run the scraper:
+1. Add URLs in `.env`
+2. Run:
 
 ```bash
 npm run build && npm run scrape
 ```
 
-This will:
+Output:
+`data/bug_reports.jsonl`
 
-- Fetch each configured URL.
-- Parse topic titles, bodies, and tags.
-- Normalize them into `BugReport`-like JSON objects.
-- Append them to `data/bug_reports.jsonl`.
-
-These examples are automatically used as few-shot context when generating new bug reports.
+Used as automatic few-shot examples during generation.
 
 ---
 
-### 6. Project Structure (Key Files)
+## Project Structure
 
-- `src/bot.ts` – Discord client, events, and message handling.
-- `src/config.ts` – Environment and configuration handling.
-- `src/commands/bugreport.ts` – `/bugreport` command definition.
-- `src/sessions/BugReportSessionManager.ts` – Thread-based conversation flow.
-- `src/ai/` – AI integration (Ollama, OpenAI, and router).
-- `src/util/bugSite.ts` – Builds the auto-fill bug report URL.
-- `src/util/embeds.ts` – Polished embeds and components (buttons).
-- `src/scraper/` – Scraper architecture and Discord forums implementation.
-- `src/scripts/scrapeDiscordForums.ts` – CLI for scraping datasets.
-- `src/scripts/syncSupportArticles.ts` – CLI for syncing official Discord support articles from GitHub.
-- `src/support/articleIndex.ts` – Fast local search index over synced support articles.
-
----
-
-### 7. Notes & Limitations
-
-- Discord’s support/bug pages can change structure; the auto-fill URL is best-effort and may need updates over time.
-- The scraper is heuristic and meant for **public** pages where scraping is allowed; always respect site policies.
-- For production use, you may want to add:
-  - Persistent storage (for per-guild settings).
-  - Rate limiting or role-based access to advanced commands.
-  - Additional commands for admins and power reporters.
-
----
-
-### 8. Discord Support Article Search (Low AI Usage)
-
-To keep costs low, BugBot can answer many issues by surfacing **official Discord support articles** instead of calling AI.
-
-The dataset comes from the public repository  
-[`xhyrom/discord-datamining`](https://github.com/xhyrom/discord-datamining/tree/master/data/articles/normal).
-
-1. **Sync the articles (cache locally)**
-
-```bash
-npm run build && npm run sync-articles
+```
+src/
+ ├─ bot.ts                       # Discord client and events
+ ├─ commands/bugreport.ts        # Slash command definition
+ ├─ sessions/                    # Guided bug reporting flow
+ ├─ ai/                          # Ollama + OpenAI adapters
+ ├─ util/                        # Embeds, URLs, helpers
+ ├─ scraper/                     # Forum scraper architecture
+ ├─ scripts/                     # CLI tools
+ └─ support/                     # Discord support article index
 ```
 
-This will:
+---
 
-- Traverse `data/articles/normal` in the GitHub repo.
-- For each article directory (e.g. `10069840290711/`), download:
-  - `meta.json` (id, URLs, title, timestamps, etc.)
-  - `content.md` (full article content, usually HTML/Markdown).
-- Normalize them into a single `support_articles.jsonl` file under `data/`.
+## Discord Support Article Search (No AI Needed)
 
-2. **Use `/support` in Discord**
+BugBot includes `/support`, which surfaces official Discord documentation locally.
 
-- Command: `/support query: how do I use regex filters in automod`
-- BugBot:
-  - Tokenizes your query.
-  - Uses a **credit-based scoring system** over the cached articles:
-    - Credits for matches in the **title** (higher weight).
-    - Credits for matches in the **body content** (lower weight).
-    - Bonus credits when an article covers **all query tokens**.
-  - Returns the **top 3** articles as rich embeds, with:
-    - Title
-    - Short snippet/preview
-    - Direct link (e.g. `html_url` from `meta.json`)
-    - Match score for transparency.
+### How it works
 
-This flow uses **no AI calls**—it’s fast and cost efficient, while still giving users high-quality answers straight from Discord’s official documentation.
+* Articles synced from GitHub (xhyrom/discord-datamining)
+* Local index
+* Token matching with weighted scoring
+* Returns top 3 relevant articles
 
+Example:
+
+```
+/support query: automod regex filters
+```
+
+Provides official articles instantly, without any AI cost.
+
+---
+
+## Limitations
+
+* Discord’s bug form may change structure
+* Scraper only works on public pages
+* Production deployments may require:
+
+  * Persistent DB
+  * Rate limits or permissions
+  * Custom org settings
+
+---
+
+## Ready for the Discord Buildathon
+
+BugBot is built to demonstrate:
+
+* AI integration directly inside Discord
+* Local-first computing (Ollama)
+* Practical real-world use cases
+* Accessibility for non-technical users
+* High developer polish
+* Strong UX focused on clarity and speed
