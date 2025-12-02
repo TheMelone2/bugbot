@@ -5,7 +5,7 @@ This comes from someone (me) who reports bugs for a living and participated in s
 
 With a simple command like `/bugreport`, BugBot uses AI to turn your issue into a clear, structured report and redirects you to the official Discord bug site with everything pre‑filled. Bug reporting becomes faster, more accessible, and far more effective.
 
-** how will BugBot work: **
+**how will BugBot work:**
 
 Step 1. User Command
 `/bugreport When I join a voice channel, my microphone randomly disconnects after 2 minutes`
