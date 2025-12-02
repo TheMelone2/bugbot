@@ -1,4 +1,4 @@
-# BugBot - AI - Powered Bug reporting for Discord
+# BugBot - AI Powered - Bug reporting for Discord
 Have you ever had any issues while being on the platform Discord? You probably have encountered some platform bugs and wanted to report it but saw how of a pain it is to report it and wait months for it to be quitly (I can't spell ik) fixed. Now not anymore with BugBot it will make bug reporting way easier, more accessible and better. 
 
 This comes from someone (me) who reports bugs for a living and participated in some special projects by Discord like the Bug Bounty Program, Playtesting  Discord Activities and writing bug reports. BugBot combines that real‑world experience with AI to make reporting bugs easier for everyone.
