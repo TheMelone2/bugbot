@@ -1,3 +1,4 @@
+/* eslint-disable prefer-const */
 import fs from "node:fs";
 import path from "node:path";
 import type { SupportArticle } from "../types/SupportArticle.js";
@@ -6,66 +7,65 @@ const DATA_FILE = path.join(process.cwd(), "data", "support_articles.jsonl");
 
 interface IndexedArticle {
   article: SupportArticle;
-  /**
-   *unique tokens that appear in the article title.
-   */
   titleTokens: Set<string>;
-  /**
-   * unique tokens that appear in the article body/content.
-   */
   bodyTokens: Set<string>;
-  /**
-   * Uuion of all tokens for fast “covers all query terms?” checks & cheap document length approximation
-   */
   allTokens: Set<string>;
-  /**
-   * Cached length-normalization factor to slightly down‑weight
-   * extremely long articles without doing heavy math per query.
-   */
   lengthNorm: number;
+  bodyLength: number;
 }
 
 let loaded = false;
-// eslint-disable-next-line prefer-const
 let indexedArticles: IndexedArticle[] = [];
-const tokenIndex: Map<string, Set<number>> = new Map();
-const idfIndex: Map<string, number> = new Map();
 
+const tokenIndex: Map<string, Set<number>> = new Map();
+const dfIndex: Map<string, number> = new Map();
+
+let avgDocLength = 1;
+
+// BM25 constants
+const BM25_K1 = 1.4;
+const BM25_B = 0.65;
+
+// debug mode toggle
+const DEBUG = process.env.DEBUG_SUPPORT_SEARCH === "true";
+
+// tokenization
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/[^a-z0-9\-]+/g, " ")
     .split(/\s+/)
+    .map((t) => t.trim())
     .filter((t) => t.length > 1);
 }
 
+// load full index -> once
 async function loadIndexIfNeeded(): Promise<void> {
   if (loaded) return;
   loaded = true;
 
+  const loadStart = performance.now();
+
   try {
     const raw = await fs.promises.readFile(DATA_FILE, "utf8");
-    const lines = raw
-      .split("\n")
-      .map((l) => l.trim())
-      .filter(Boolean);
+    const lines = raw.split("\n").map((l) => l.trim()).filter(Boolean);
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    lines.forEach((line, idx) => {
+    let totalLength = 0;
+
+    lines.forEach((line) => {
       try {
         const article = JSON.parse(line) as SupportArticle;
 
-        const titleTokens = new Set(
-          tokenize((article.title ?? "").slice(0, 2_000))
-        );
-        const bodyTokens = new Set(
-          tokenize((article.content ?? "").slice(0, 10_000))
-        );
+        const titleTokensArr = tokenize((article.title ?? "").slice(0, 2000));
+        const bodyTokensArr = tokenize((article.content ?? "").slice(0, 10_000));
 
-        const allTokens = new Set<string>([
-          ...titleTokens.values(),
-          ...bodyTokens.values(),
-        ]);
+        const titleTokens = new Set(titleTokensArr);
+        const bodyTokens = new Set(bodyTokensArr);
+
+        const allTokens = new Set([...titleTokens, ...bodyTokens]);
+        const bodyLength = bodyTokensArr.length || 1;
+
+        totalLength += bodyLength;
 
         const lengthNorm = Math.sqrt(allTokens.size || 1);
 
@@ -76,47 +76,57 @@ async function loadIndexIfNeeded(): Promise<void> {
           bodyTokens,
           allTokens,
           lengthNorm,
+          bodyLength,
         });
 
         for (const token of allTokens) {
           let set = tokenIndex.get(token);
           if (!set) {
-            set = new Set<number>();
+            set = new Set();
             tokenIndex.set(token, set);
           }
           set.add(index);
         }
       } catch {
-        // skip bad lines
+        /* ignore */
       }
     });
 
-    // pre-compute an IDF-style weight per token so queries
-    // only do cheap lookups instead of logarithms.
-    const totalDocs = indexedArticles.length || 1;
+    // compute document frequency
     for (const [token, ids] of tokenIndex.entries()) {
-      const df = ids.size || 1;
-      // ln(1 + N / df)
-      const idf = Math.log(1 + totalDocs / df);
-      idfIndex.set(token, idf);
+      dfIndex.set(token, ids.size);
     }
 
+    avgDocLength = totalLength / Math.max(1, indexedArticles.length);
+
+    const loadEnd = performance.now();
     console.log(
-      `[BugBot][SupportIndex] Loaded ${indexedArticles.length} articles from ${DATA_FILE}`
+      `[BugBot][SupportIndex] Loaded ${indexedArticles.length} articles in ${(loadEnd - loadStart).toFixed(1)}ms`
     );
   } catch (err) {
-    console.warn(
-      `[BugBot][SupportIndex] Could not load support articles from ${DATA_FILE}:`,
-      err
-    );
+    console.warn(`[BugBot][SupportIndex] Failed loading:`, err);
   }
+}
+
+// BM25 core scoring
+function bm25Score(
+  tf: number,
+  df: number,
+  docLen: number,
+  totalDocs: number
+): number {
+  const idf = Math.log(1 + (totalDocs - df + 0.5) / (df + 0.5));
+  const norm = (tf * (BM25_K1 + 1)) / (tf + BM25_K1 * (1 - BM25_B + (BM25_B * docLen) / avgDocLength));
+  return idf * norm;
 }
 
 export interface ScoredArticle {
   article: SupportArticle;
   score: number;
+  debug?: string;
 }
 
+// main search
 export async function searchSupportArticles(
   query: string,
   maxResults = 3
@@ -127,71 +137,82 @@ export async function searchSupportArticles(
   const qTokens = tokenize(query);
   if (!qTokens.length) return [];
 
-  const candidateScores = new Map<number, number>();
-  const matchedTokenCounts = new Map<number, number>();
+  const searchStart = performance.now();
+
+  const tokenTimings: Record<string, number> = {};
+
+  const scores = new Map<number, number>();
+  const debugInfo = new Map<number, string[]>();
+
+  const totalDocs = indexedArticles.length;
 
   for (const token of qTokens) {
-    const ids = tokenIndex.get(token);
-    if (!ids) continue;
+    const tStart = performance.now();
 
-    const idf = idfIndex.get(token) ?? 0;
-    if (idf === 0) continue;
+    const ids = tokenIndex.get(token);
+    if (!ids) {
+      tokenTimings[token] = performance.now() - tStart;
+      continue;
+    }
+
+    const df = dfIndex.get(token) || 1;
 
     for (const idx of ids) {
       const item = indexedArticles[idx];
 
-      // start with IDF‑weighted token score
-      let tokenScore = idf;
+      // term frequency (title weighted)
+      let tf = 0;
 
-      // strong boost if the token appears in the title,
-      // lighter weight if it only appears in the body.
-      if (item.titleTokens.has(token)) {
-        tokenScore *= 3;
-      } else if (item.bodyTokens.has(token)) {
-        tokenScore *= 1.5;
+      if (item.titleTokens.has(token)) tf += 3; // heavy title boost
+      if (item.bodyTokens.has(token)) tf += 1;
+
+      if (tf === 0) continue;
+
+      const s = bm25Score(tf, df, item.bodyLength, totalDocs);
+
+      scores.set(idx, (scores.get(idx) ?? 0) + s);
+
+      if (DEBUG) {
+        const line = `token=${token}, tf=${tf}, df=${df}, doclen=${item.bodyLength.toFixed(
+          0
+        )}, score=${s.toFixed(2)}`;
+        (debugInfo.get(idx) ?? debugInfo.set(idx, []).get(idx)!).push(line);
       }
-
-      const prev = candidateScores.get(idx) ?? 0;
-      candidateScores.set(idx, prev + tokenScore);
-
-      matchedTokenCounts.set(
-        idx,
-        (matchedTokenCounts.get(idx) ?? 0) + 1
-      );
     }
+
+    tokenTimings[token] = performance.now() - tStart;
   }
 
-  if (!candidateScores.size) return [];
+  // no candidates
+  if (!scores.size) {
+    console.log(`[BugBot][Search] no results for "${query}"`);
+    return [];
+  }
 
-  const scored: ScoredArticle[] = Array.from(candidateScores.entries())
-    .map(([idx, baseScore]) => {
-      const item = indexedArticles[idx];
-      const matchedCount = matchedTokenCounts.get(idx) ?? 0;
-
-      let score = baseScore;
-
-      // Reward articles that match more of the distinct query tokens.
-      if (matchedCount > 1) {
-        score += matchedCount * 0.75;
-      }
-
-      // Bonus if the article text covers ALL query tokens.
-      const coversAll = qTokens.every((t) => item.allTokens.has(t));
-      if (coversAll) {
-        score += 3;
-      }
-
-      // Light document‑length normalization to avoid very long articles always winning.
-      const norm = item.lengthNorm || 1;
-      score = score / (0.5 + norm * 0.1);
-
-      return {
-        article: item.article,
-        score,
-      };
-    })
+  // collect top N
+  const result = [...scores.entries()]
+    .map(([idx, score]) => ({
+      article: indexedArticles[idx].article,
+      score,
+      debug: DEBUG ? debugInfo.get(idx)?.join("\n") ?? "" : undefined,
+    }))
     .sort((a, b) => b.score - a.score)
     .slice(0, maxResults);
 
-  return scored;
+  const searchEnd = performance.now();
+
+  // log timings
+  const sortedTokens = Object.entries(tokenTimings)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([tok, time]) => `${tok}=${time.toFixed(2)}ms`)
+    .join(", ");
+
+  console.log(
+    `[BugBot][Search] query="${query}" tokens=${qTokens.length} results=${result.length} total=${(
+      searchEnd - searchStart
+    ).toFixed(2)}ms slowest_tokens=[${sortedTokens}]`
+  );
+
+  return result;
 }
