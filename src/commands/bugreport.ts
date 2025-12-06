@@ -1,6 +1,7 @@
 import {
   ActionRowBuilder,
   ChatInputCommandInteraction,
+  MessageFlags,
   ModalBuilder,
   PermissionFlagsBits,
   SlashCommandBuilder,
@@ -8,19 +9,23 @@ import {
   TextInputStyle,
   type ModalSubmitInteraction,
   type ButtonInteraction,
+  ContainerBuilder,
+  TextDisplayBuilder,
+  SeparatorBuilder,
+  SeparatorSpacingSize,
+  ButtonBuilder,
+  ButtonStyle,
 } from "discord.js";
 import type { Command } from "./Command.js";
 import type { BugReport, BugReportInput } from "../types/BugReport.js";
 import { generateBugReport } from "../ai/index.js";
 import { buildBugReportUrl } from "../util/bugSite.js";
-import {
-  buildBugReportComponents,
-  buildBugReportEmbed,
-} from "../util/embeds.js";
+import { searchSupportArticles } from "../support/articleIndex.js";
 
 export const BUGREPORT_MODAL_ID = "bugbot-bugreport-modal";
 export const BUGREPORT_DETAILS_BUTTON_PREFIX =
   "bugbot-bugreport-details:";
+export const BUGREPORT_SUGGESTION_PREFIX = "bugbot-bugreport-suggestion:";
 
 const inMemoryReports = new Map<string, BugReport>();
 
@@ -30,7 +35,7 @@ function storeBugReport(report: BugReport): string {
     .slice(2, 8)}`;
   inMemoryReports.set(id, report);
 
-  // best-effort cleanup after 30 minutes so memory doesn’t grow unbounded
+  // cleanup after 30 minutes so memory doesn't grow unbounded
   setTimeout(() => {
     inMemoryReports.delete(id);
   }, 1000 * 60 * 30).unref?.();
@@ -53,19 +58,10 @@ export const bugReportCommand: Command = {
     .setDescription(
       "Open a Discord modal to turn an issue into a polished bug report with AI."
     )
-    .setDMPermission(false)
+    .setDMPermission(true)
     .setDefaultMemberPermissions(PermissionFlagsBits.SendMessages),
 
   async execute(interaction: ChatInputCommandInteraction) {
-    if (!interaction.inCachedGuild()) {
-      await interaction.reply({
-        content:
-          "BugBot currently only supports bug reporting inside servers (not DMs).",
-        ephemeral: true,
-      });
-      return;
-    }
-
     const modal = new ModalBuilder()
       .setCustomId(BUGREPORT_MODAL_ID)
       .setTitle("BugBot – Discord bug report");
@@ -73,13 +69,15 @@ export const bugReportCommand: Command = {
     const summaryInput = new TextInputBuilder()
       .setCustomId("summary")
       .setLabel("Short title / summary")
+      .setPlaceholder("e.g., Messages not loading on mobile")
       .setStyle(TextInputStyle.Short)
       .setRequired(true)
       .setMaxLength(150);
 
     const severityInput = new TextInputBuilder()
       .setCustomId("severity")
-      .setLabel("Severity (low / medium / high / critical)")
+      .setLabel("Severity (optional)")
+      .setPlaceholder("low / medium / high / critical")
       .setStyle(TextInputStyle.Short)
       .setRequired(false)
       .setMaxLength(50);
@@ -87,20 +85,23 @@ export const bugReportCommand: Command = {
     const descriptionInput = new TextInputBuilder()
       .setCustomId("description")
       .setLabel("Describe what happens")
+      .setPlaceholder("Explain the issue in detail...")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(true)
       .setMaxLength(1900);
 
     const stepsInput = new TextInputBuilder()
       .setCustomId("steps")
-      .setLabel("Steps to reproduce (one per line)")
+      .setLabel("Steps to reproduce (optional)")
+      .setPlaceholder("1. Open Discord\n2. Go to settings\n3. Click...")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(false)
       .setMaxLength(1500);
 
     const environmentInput = new TextInputBuilder()
       .setCustomId("environment")
-      .setLabel("Environment (platform, OS, version)")
+      .setLabel("Environment (optional)")
+      .setPlaceholder("Platform: Desktop | OS: Windows 11 | Version: 1.0.0")
       .setStyle(TextInputStyle.Paragraph)
       .setRequired(false)
       .setMaxLength(1000);
@@ -147,7 +148,7 @@ export async function handleBugReportModal(
     severity,
   };
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
   try {
     console.log(
@@ -156,21 +157,139 @@ export async function handleBugReportModal(
 
     const report = await generateBugReport(input);
     const url = buildBugReportUrl(report);
-    const embed = buildBugReportEmbed(report, url);
     const storeId = storeBugReport(report);
     const detailsCustomId = buildDetailsCustomId(storeId);
 
+    const searchQuery = `${summary} ${detailedDescription}`.slice(0, 200);
+    const suggestions = await searchSupportArticles(searchQuery, 3);
+
+    const textDisplays: TextDisplayBuilder[] = [
+      new TextDisplayBuilder().setContent("✅ **Bug Report Ready!**"),
+      new TextDisplayBuilder().setContent(
+        "Your bug report has been polished and is ready to submit. Review the details below, then click the button to open Discord's official bug report form with everything pre-filled."
+      ),
+      new TextDisplayBuilder().setContent("📋 **Title**"),
+      new TextDisplayBuilder().setContent(
+        report.title || "Untitled bug report"
+      ),
+      new TextDisplayBuilder().setContent("📝 **Description**"),
+      new TextDisplayBuilder().setContent(
+        (report.description || "No description provided.").slice(0, 1000)
+      ),
+    ];
+
+    if (report.stepsToReproduce?.length) {
+      const stepsText = report.stepsToReproduce
+        .map((step, idx) => `${idx + 1}. ${step}`)
+        .join("\n");
+      textDisplays.push(
+        new TextDisplayBuilder().setContent("🔢 **Steps to Reproduce**"),
+        new TextDisplayBuilder().setContent(stepsText.slice(0, 1000))
+      );
+    }
+
+    if (report.environment) {
+      const envParts: string[] = [];
+      if (report.environment.platform)
+        envParts.push(`Platform: ${report.environment.platform}`);
+      if (report.environment.os) envParts.push(`OS: ${report.environment.os}`);
+      if (report.environment.appVersion)
+        envParts.push(`App Version: ${report.environment.appVersion}`);
+      if (envParts.length) {
+        textDisplays.push(
+          new TextDisplayBuilder().setContent("💻 **Environment**"),
+          new TextDisplayBuilder().setContent(envParts.join(" | "))
+        );
+      }
+    }
+
+    const container = new ContainerBuilder()
+      .setAccentColor(0x5865f2) // Discord blurple
+      .addTextDisplayComponents(...textDisplays)
+      .addSeparatorComponents(
+        new SeparatorBuilder()
+          .setDivider(true)
+          .setSpacing(SeparatorSpacingSize.Small)
+      );
+
+    const components: (ContainerBuilder | SeparatorBuilder | ActionRowBuilder<ButtonBuilder>)[] = [container];
+
+    // Add action buttons as ActionRow
+    const openFormButton = new ButtonBuilder()
+      .setLabel("📤 Open Discord Bug Form")
+      .setURL(url)
+      .setStyle(ButtonStyle.Link);
+
+    const viewDetailsButton = new ButtonBuilder()
+      .setLabel("📄 View Full Report")
+      .setCustomId(detailsCustomId)
+      .setStyle(ButtonStyle.Secondary);
+
+    const actionRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      openFormButton,
+      viewDetailsButton
+    );
+
+    components.push(actionRow);
+
+    if (suggestions.length > 0) {
+      components.push(
+        new SeparatorBuilder()
+          .setDivider(true)
+          .setSpacing(SeparatorSpacingSize.Large)
+      );
+
+      const suggestionTexts: TextDisplayBuilder[] = [
+        new TextDisplayBuilder().setContent("💡 **Helpful Suggestions**"),
+        new TextDisplayBuilder().setContent(
+          "Based on your bug report, here are some relevant Discord support articles that might help:"
+        ),
+      ];
+
+      for (const [idx, { article }] of suggestions.entries()) {
+        suggestionTexts.push(
+          new TextDisplayBuilder().setContent(`${idx + 1}. ${article.title}`)
+        );
+      }
+
+      const suggestionsContainer = new ContainerBuilder()
+        .setAccentColor(0x57f287)
+        .addTextDisplayComponents(...suggestionTexts);
+
+      components.push(suggestionsContainer);
+
+      const suggestionButtons = suggestions.map(({ article }) =>
+        new ButtonBuilder()
+          .setLabel(`📚 ${article.title.slice(0, 70)}`)
+          .setURL(article.htmlUrl)
+          .setStyle(ButtonStyle.Link)
+      );
+
+      const suggestionsRow = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        ...suggestionButtons
+      );
+      components.push(suggestionsRow);
+    }
+
     await interaction.editReply({
-      content:
-        "Here’s your polished bug report. Review it and then click the button below to open the official Discord bug report form with everything pre-filled.",
-      embeds: [embed],
-      components: buildBugReportComponents(url, detailsCustomId),
+      flags: MessageFlags.IsComponentsV2,
+      components,
     });
   } catch (err) {
     console.error("Failed to generate bug report from modal:", err);
-    await interaction.editReply(
-      "Sorry, I couldn’t generate the bug report automatically. Please try again in a moment."
-    );
+    await interaction.editReply({
+      flags: MessageFlags.IsComponentsV2,
+      components: [
+        new ContainerBuilder()
+          .setAccentColor(0xed4245)
+          .addTextDisplayComponents(
+            new TextDisplayBuilder().setContent("❌ **Error**"),
+            new TextDisplayBuilder().setContent(
+              "Sorry, I couldn't generate the bug report automatically. Please try again in a moment."
+            )
+          ),
+      ],
+    });
   }
 }
 
@@ -181,8 +300,8 @@ export async function handleBugReportDetailsButton(
   if (!id) {
     await interaction.reply({
       content:
-        "I couldn’t find the details for this bug report button. Please run `/bugreport` again.",
-      ephemeral: true,
+        "I couldn't find the details for this bug report button. Please run `/bugreport` again.",
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -192,7 +311,7 @@ export async function handleBugReportDetailsButton(
     await interaction.reply({
       content:
         "This bug report details link has expired. Please generate a new report with `/bugreport`.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
@@ -235,6 +354,6 @@ export async function handleBugReportDetailsButton(
 
   await interaction.reply({
     content: lines.join("\n"),
-    ephemeral: true,
+    flags: MessageFlags.Ephemeral,
   });
 }
