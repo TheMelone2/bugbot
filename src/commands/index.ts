@@ -3,7 +3,7 @@ import type {
   Collection,
   SlashCommandBuilder,
 } from "discord.js";
-import { Collection as DjsCollection } from "discord.js";
+import { Collection as DjsCollection, MessageFlags } from "discord.js";
 import type { Command } from "./Command.js";
 import { bugReportCommand } from "./bugreport.js";
 import { supportCommand } from "./support.js";
@@ -30,7 +30,7 @@ export async function handleChatInputCommand(
   if (!command) {
     await interaction.reply({
       content: "I don’t recognize that command.",
-      ephemeral: true,
+      flags: MessageFlags.Ephemeral,
     });
     return;
   }
