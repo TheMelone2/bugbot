@@ -36,12 +36,12 @@ BugBot makes bug reporting *fast*, *accessible*, and *effective* for everyone - 
 ### 1. User Command
 
 ```text
-/bugreport When I join a voice channel, my microphone disconnects after 2 minutes
+/bugreport
 ```
 
 ### 2. AI Processing
 
-BugBot turns the raw text into a structured report:
+BugBot turns the raw text into a structured report (after model processing):
 
 * **Title** - concise summary
 * **Description** - clear, rewritten explanation
@@ -57,20 +57,47 @@ Just review → click Submit → done.
 ### 4. Confirmation in Discord
 
 In a private flow or DM:
-
+```json
+{
+  "title": "User is unable to DM a friend",
+  "description": "User is unable to send a DM to my friend. Tried multiple times, but the message doesn't go through. Checked internet connection and device's microphone, but everything seems to be working fine.",
+  "stepsToReproduce": [
+    "1. Open the Discord application.",
+    "2. Navigate to the DM channel.",
+    "3. Attempt to DM user 'old friend'.",
+    "4. Observe that the message does not go through."
+  ],
+  "component": "Application",
+  "severity": "medium",
+  "environment": {
+    "clientType": "Web",
+    "clientInfo": "Discord Web App",
+    "os": "Desktop",
+    "browser": "Chromium",
+    "deviceManufacturer": "Mobile",
+    "deviceModel": "iPhone 13"
+  },
+  "reasoning": "The description clearly indicates a problem with DMing a friend. It includes the specific message being delivered and the expected outcome. The provided environment notes point to a possible Discord Web App issue, potentially affecting the DM functionality for specific user types.",
+  "reproducibilityScore": 70,
+  "attachments": [
+    "rawSummary"
+  ],
+  "sources": [
+    "detailedDescription"
+  ]
+}
 ```
-Bug report prepared!
-Title: Microphone disconnects after 2 minutes in voice channels
-Status: Ready to submit
-```
-
 ---
 
 ## Features
 
-* **/bugreport command** - Start a guided bug reporting flow
-* **Private flow UX** - Clean, focused, and reviewable
+* **/bugreport command** - Start a guided bug reporting flow with paginated guide
+* **Interactive Guide System** - Multi-page guide with pagination buttons
+* **Skip to Form** - Quick access button for experienced users
+* **Private flow UX** - Clean, focused, and reviewable using Discord Components v2
 * **AI-powered rewriting** - Ollama (local) by default, OpenAI optional
+* **Smart AI Inference** - AI infers missing information when possible, reducing user input requirements
+* **AI Content Warnings** - Clear warnings about verifying AI-generated content (what a feature... wow)
 * **Strict JSON BugReport schema** ensuring clean output
 * **Auto-fill bug form links** for fast submission
 * **Dataset** from Discord's official documentation
@@ -82,12 +109,10 @@ Status: Ready to submit
 
 BugBot is trained using:
 
-* Public bug trackers
-* Public Discord forum posts
 * Synthetic (generated) bug reports
 * Community-submitted anonymized examples
 
-No private Discord data is used.
+No private and/or online available data is used without explicit consent. 
 
 ---
 
@@ -121,7 +146,8 @@ Fill in:
 * `AI_BACKEND` (ollama or openai)
 * `OLLAMA_BASE_URL`, `OLLAMA_MODEL`
 * (Optional) `OPENAI_API_KEY`, `OPENAI_MODEL`
-* `SCRAPER_DISCORD_FORUM_URLS`
+* (Not used anymore -->)`SCRAPER_DISCORD_FORUM_URLS`
+* `KNOWN_COMPONENTS="Gateway\nREST API\nQuests\nApplication\nBot\nOAuth2\nWebhooks\nInteractions\nApplication Commands (Slash Commands)\nContext Menus\nGuild (Server)\nChannel (Text Channel)\nChannel (Voice Channel)\nChannel (Stage Channel)\nChannel (Announcement Channel)\nChannel (Forum Channel)\nThread\nMessage\nMessage Attachments\nMessage Embeds\nPinned Messages\nMessage Reactions\nMessage Components\nUser\nMember\nRole\nPermissions\nPresence\nVoice State\nInvite\nAudit Log\nBan/Unban\nModeration Actions (Kick/Mute/Timeout)\nAutoMod\nServer Insights\nServer Templates\nServer Banners\nPer-Server Profiles\nEmoji (Custom Emoji)\nStickers\nNitro\nServer Boosting\nDiscover\nIntegrations\nThird-Party Connections (Spotify, Twitch, etc.)\nRich Presence / Activity\nWidgets\nSearch\nNotifications\nBookmarks\nSlowmode\nVoice (RTC)\nVideo Calls\nScreen Share / Go Live\nStage (Live Audio Events)\nVoice Regions (legacy/controls)\nComponents: Button\nComponents: Select Menu (Dropdown)\nComponents: Action Row\nComponents: Modal (Modal Submit)\nComponents: Select Option\nComponents: Checkbox (where applicable via Selects)\nApplication Command Permissions\nRate Limits\nGateway Intents (Presence, Guild Members, Message Content)\nThread Auto-Archive\nForum Moderation Tools\nInvite System\nIntegrations (Webhooks, OAuth apps)\nBot Account Controls\nDeveloper Portal (App settings)"`
 
 3. Build
 
@@ -133,6 +159,12 @@ npm run build
 
 ```bash
 npm run register-commands
+```
+
+4.2 Sync support articles
+
+```bash
+npm run sync-articles
 ```
 
 5. Start the bot
@@ -154,18 +186,31 @@ npm run dev
 1. In any channel, run:
 
 ```text
-/bugreport summary: My microphone stops working after 2 minutes in VC
+/bugreport
 ```
 
-2. BugBot:
+2. BugBot shows an interactive guide with:
+   * **Page 1**: What you need for a good bug report
+   * **Page 2**: What BugBot will do + AI content warnings
+   * **Page 3**: Helpful resources (Discord support articles, GitHub links)
+   * Navigation buttons to move between pages
+   * **"Skip to Form"** button for experienced users
 
-   * Creates a private flow
-   * Guides you through description → steps → environment
-   * Calls the AI backend
-   * Generates the final structured report
-   * Sends an auto-filled link to the Discord bug form
+3. Click **"Open Bug Report Form"** to fill out the modal with:
+   * Title/Summary (required)
+   * Description (required)
+   * Steps to Reproduce (required)
+   * Environment Info (required)
+   * Impact Description (optional)
 
-3. A final embed summarizes the full report.
+4. BugBot:
+   * Uses AI to structure and polish your report
+   * Infers missing information when possible
+   * Generates a professional bug report
+   * Creates an auto-filled link to Discord's bug form
+   * Shows relevant support articles if available
+
+5. **Important**: Always review the AI-generated report before submitting! AI may infer information, so verify all details are accurate.
 
 ---
 
@@ -176,34 +221,27 @@ npm run dev
 * Default backend
 * Fast and cost-free
 * Strict JSON output
+* Smart inference capabilities
 
 ### Cloud (OpenAI)
 
 * Optional or fallback
 * Same structured output format
+* Smart inference capabilities
 
 **Fallback logic:**
 
 * `AI_BACKEND=ollama`: try Ollama → fallback to OpenAI
 * `AI_BACKEND=openai`: try OpenAI → fallback to Ollama
 
----
+### AI Inference Features
 
-## Dataset Scraper (Discord Forums)
-
-BugBot includes a CLI scraper to gather examples from **public Discord community/forum pages**.
-
-1. Add URLs in `.env`
-2. Run:
-
-```bash
-npm run build && npm run scrape
-```
-
-Output:
-`data/bug_reports.jsonl`
-
-Used as automatic few-shot examples during generation.
+BugBot's AI is designed to be helpful, not strict:
+* **Infers missing fields** from provided context
+* **Extracts environment details** from free-form text
+* **Determines component and severity** from descriptions
+* **Only asks for more info** when absolutely necessary
+* **Marks all inferences** with "(inferred)" for transparency
 
 ---
 
@@ -223,13 +261,13 @@ src/
 
 ---
 
-## Discord Support Article Search (No AI Needed)
+## Discord Support Article Search
 
 BugBot includes `/support`, which surfaces official Discord documentation locally.
 
 ### How it works
 
-* Articles synced from GitHub (xhyrom/discord-datamining)
+* Articles synced
 * Local index
 * Token matching with weighted scoring
 * Returns top 3 relevant articles
@@ -244,10 +282,32 @@ Provides official articles instantly, without any AI cost.
 
 ---
 
+## UI/UX Features
+
+* **Discord Components v2** - Modern, interactive UI with:
+  * ContainerBuilder for organized content sections
+  * SectionBuilder for content with button accessories
+  * SeparatorBuilder for visual hierarchy
+  * TextDisplayBuilder for rich markdown content
+  * ButtonBuilder for interactive actions
+
+* **Pagination System** - Navigate through guide pages easily
+* **Skip Functionality** - Experienced users can skip directly to the form
+* **Resource Links** - Direct access to Discord support articles and GitHub
+
+## AI Content Verification
+
+⚠️ **Important**: BugBot uses AI to improve your bug reports, but:
+* **Always verify** AI-generated content before submitting
+* AI may infer or add information you didn't provide
+* Review all details for accuracy and truthfulness
+* This is a **tool to improve** reports, not a replacement for your judgment
+* **Never trust AI-generated content 100%** - always review
+
 ## Limitations
 
-* Discord’s bug form may change structure
-* Scraper only works on public pages
+* Discord's bug form may change structure
+* AI inference may occasionally be incorrect - always verify
 * Production deployments may require:
 
   * Persistent DB
