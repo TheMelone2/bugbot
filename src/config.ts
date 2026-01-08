@@ -13,6 +13,7 @@ export interface AppConfig {
   openaiApiKey?: string;
   openaiModel: string;
   scraperDiscordForumUrls: string[];
+  knownComponents?: string[];
 }
 
 function getEnv(
@@ -28,6 +29,7 @@ function getEnv(
 }
 
 const scraperUrlsRaw = process.env.SCRAPER_DISCORD_FORUM_URLS ?? "";
+const knownComponentsRaw = process.env.KNOWN_COMPONENTS ?? "";
 
 export const config: AppConfig = {
   discordToken: getEnv("DISCORD_TOKEN"),
@@ -40,5 +42,9 @@ export const config: AppConfig = {
   scraperDiscordForumUrls: scraperUrlsRaw
     .split(",")
     .map((s: string) => s.trim())
+    .filter(Boolean),
+  knownComponents: knownComponentsRaw
+    .split("\n")
+    .map(s => s.trim())
     .filter(Boolean),
 };
