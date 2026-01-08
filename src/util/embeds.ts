@@ -29,12 +29,12 @@ export function buildBugReportEmbed(
       },
       {
         name: "Status",
-        value: "✅ Ready to submit",
+        value: "❓ Needs review!",
       }
     )
     .setURL(url)
     .setFooter({
-      text: "Bugot · Built for power reporters and everyday Discord users",
+      text: "BugBot · Built for power reporters and everyday Discord users",
     });
 
   return embed;
