@@ -10,10 +10,17 @@ export interface BugReport {
     appVersion?: string;
     networkInfo?: string;
     additionalDetails?: string;
+    clientType?: string;
+    clientInfo?: string;
+    browserType?: string;
+    deviceManufacturer?: string;
+    deviceModel?: string;
   };
   severity?: "low" | "medium" | "high" | "critical" | string;
   component?: string;
   attachments?: string[];
+  reasoning?: string;
+  reproducibilityScore?: number;
 }
 
 export interface BugReportInput {
