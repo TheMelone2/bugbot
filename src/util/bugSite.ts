@@ -1,14 +1,7 @@
 import type { BugReport } from "../types/BugReport.js";
 
 /**
- * TODO: this builds a URL to Discord's public bug/feedback form with best-effort prefill
- *
- * FYI: Discord does not officially document stable query params for their
- * bug report forms. This implementation uses a generic support URL and
- * packs the report into the query string for easy copy/paste :d
- *
- * We'll later replace this with a more precise URL or integration once we
- * settle on the official target form
+ * TODO: THIS IS OUTDATED!!!!!!!!!!!!!!!
  */
 export function buildBugReportUrl(report: BugReport): string {
   // Discord's bug reporting form
@@ -33,9 +26,12 @@ export function buildBugReportUrl(report: BugReport): string {
     "**Discord Client Info**",
     [
       report.environment.platform && `Platform: ${report.environment.platform}`,
+      report.environment.clientType && `Client Type: ${report.environment.clientType}`,
       report.environment.os && `OS: ${report.environment.os}`,
       report.environment.appVersion &&
         `App version: ${report.environment.appVersion}`,
+      report.environment.clientInfo &&
+        `Client Info: ${report.environment.clientInfo}`,
       report.environment.networkInfo &&
         `Network: ${report.environment.networkInfo}`,
       report.environment.additionalDetails,
@@ -54,7 +50,8 @@ export function buildBugReportUrl(report: BugReport): string {
   // Discord buttons have a hard 512-character limit on URLs.
   // If our auto-filled URL is too long, fall back to the base form URL
   // and rely on the embed text for copy-paste instead of breaking the request.
-  // TODO: Will replace this with an URL shortener!
+  // TODO: Will replace this with an URL shortener! 
+
   if (url.length > 500) {
     url = baseUrl;
   }
