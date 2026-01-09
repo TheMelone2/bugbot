@@ -16,6 +16,10 @@ It guides users through a focused flow, uses AI to rewrite their report, and sen
 Built by someone who has reported bugs for Discord for years, including participation in the **Discord Bug Bounty Program**, **Activities Playtesting**, and numerous internal feedback initiatives - BugBot blends real-world bug hunting experience with modern AI assistance.
 
 ---
+## Known Issues
+You can find the known issues [here](KNOWN_ISSUES.md). Even after this buildathon, we'll maintain this list and fix the issues as soon as possible.
+
+---
 
 ## Why BugBot?
 
