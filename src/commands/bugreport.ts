@@ -85,6 +85,212 @@ function extractIdFromCustomId(customId: string): string | null {
   return customId.slice(BUGREPORT_DETAILS_BUTTON_PREFIX.length);
 }
 
+/**
+ * Checks if a field contains full bug report JSON and extracts  --> Returns the parsed bug report object if found, null otherwise
+ */
+function extractBugReportFromField(fieldValue: string | undefined | null): Partial<BugReport> | null {
+  if (!fieldValue) return null;
+  
+  let trimmed = fieldValue.trim();
+  // rm markdown code blocks
+  trimmed = trimmed.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  
+  if (!trimmed.startsWith("{")) return null;
+  
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+      const obj = parsed as Record<string, unknown>;
+      const hasTitle = "title" in obj;
+      const hasDescription = "description" in obj;
+      const hasSteps = "stepsToReproduce" in obj;
+      const hasEnvironment = "environment" in obj;
+      const hasBugReportFields = (hasTitle || hasDescription || hasSteps || hasEnvironment) && Object.keys(obj).length >= 2;
+      
+      if (hasBugReportFields) {
+        return obj as Partial<BugReport>;
+      }
+    }
+  } catch {
+    // not valid JSON
+  }
+  
+  return null;
+}
+
+function formatText(text: string | undefined | null, extractField?: string, depth = 0): string {
+  if (!text) return "";
+  
+  // prevent infinite recursion
+  if (depth > 2) return text;
+  
+  let trimmed = text.trim();
+  
+  // rm markdown code blocks if present (```json ... ``` | ``` ... ```)
+  trimmed = trimmed.replace(/^```(?:json)?\s*\n?/i, "").replace(/\n?```\s*$/i, "").trim();
+  
+  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+    return text;
+  }
+  
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        return trimmed.replace(/\s+/g, " ").slice(0, 1000);
+      }
+    } else {
+      return text;
+    }
+  }
+  
+  if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+    const obj = parsed as Record<string, unknown>;
+    
+    const hasTitle = "title" in obj;
+    const hasDescription = "description" in obj;
+    const hasSteps = "stepsToReproduce" in obj;
+    const hasEnvironment = "environment" in obj;
+    const hasBugReportFields = (hasTitle || hasDescription || hasSteps || hasEnvironment) && Object.keys(obj).length >= 2;
+    
+      if (hasBugReportFields) {
+        const isPlaceholder = (value: string): boolean => {
+          const placeholders = [
+            "detailed description from input",
+            "detailed description",
+            "description from input",
+            "clear title from input",
+            "untitled bug report",
+            "no description provided"
+          ];
+          return placeholders.some(p => value.toLowerCase().includes(p));
+        };
+        
+        if (extractField) {
+          if (extractField in obj) {
+            const fieldValue = obj[extractField];
+            if (typeof fieldValue === "string" && fieldValue.trim()) {
+              const trimmed = fieldValue.trim();
+              if (isPlaceholder(trimmed)) {
+                return formatBugReportObject(obj);
+              }
+              return trimmed;
+            }
+            if (Array.isArray(fieldValue)) {
+              return formatObject(fieldValue);
+            }
+            if (fieldValue !== null && fieldValue !== undefined) {
+              return String(fieldValue);
+            }
+          }
+          return formatBugReportObject(obj);
+        }
+        
+        return formatBugReportObject(obj);
+      }
+    
+    return formatObject(parsed);
+  }
+  
+  if (Array.isArray(parsed)) {
+    return formatObject(parsed);
+  }
+  
+  return String(parsed);
+}
+
+
+function formatBugReportObject(obj: Record<string, unknown>): string {
+  const parts: string[] = [];
+  
+  if (obj.title && typeof obj.title === "string") {
+    parts.push(`**Title:** ${obj.title}`);
+  }
+  
+  if (obj.description && typeof obj.description === "string") {
+    parts.push(`**Description:**\n${obj.description}`);
+  }
+  
+  if (obj.stepsToReproduce && Array.isArray(obj.stepsToReproduce)) {
+    const steps = obj.stepsToReproduce
+      .map((step, idx) => `${idx + 1}. ${String(step)}`)
+      .join("\n");
+    parts.push(`**Steps to Reproduce:**\n${steps}`);
+  }
+  
+  if (obj.environment && typeof obj.environment === "object" && obj.environment !== null) {
+    const env = obj.environment as Record<string, unknown>;
+    const envParts: string[] = [];
+    if (env.platform) envParts.push(`Platform: ${env.platform}`);
+    if (env.clientType) envParts.push(`Client: ${env.clientType}`);
+    if (env.os) envParts.push(`OS: ${env.os}`);
+    if (env.appVersion) envParts.push(`App Version: ${env.appVersion}`);
+    if (env.clientInfo) envParts.push(`Client Info: ${env.clientInfo}`);
+    if (env.browserType) envParts.push(`Browser: ${env.browserType}`);
+    if (envParts.length) {
+      parts.push(`**Environment:** ${envParts.join(" | ")}`);
+    }
+  } 
+  
+  if (obj.severity && typeof obj.severity === "string") {
+    parts.push(`**Severity:** ${obj.severity}`);
+  }
+  
+  if (obj.component && typeof obj.component === "string") {
+    parts.push(`**Component:** ${obj.component}`);
+  }
+  
+  if (obj.reasoning && typeof obj.reasoning === "string") {
+    parts.push(`**AI Reasoning:**\n${obj.reasoning}`);
+  }
+  
+  if (obj.reproducibilityScore && typeof obj.reproducibilityScore === "number") {
+    parts.push(`**Reproducibility Score:** ${obj.reproducibilityScore}/100`);
+  }
+  
+  return parts.join("\n\n");
+}
+
+
+function formatObject(obj: unknown, indent = 0): string {
+  if (obj === null) return "null";
+  if (obj === undefined) return "undefined";
+  
+  if (typeof obj === "string") return obj;
+  if (typeof obj !== "object") return String(obj);
+  
+  if (Array.isArray(obj)) {
+    if (obj.length === 0) return "[]";
+    return obj
+      .map((item, idx) => {
+        const formatted = typeof item === "object" && item !== null
+          ? formatObject(item, indent + 1)
+          : String(item);
+        return `${idx + 1}. ${formatted}`;
+      })
+      .join("\n");
+  }
+  
+  // It's an object wow
+  const entries = Object.entries(obj as Record<string, unknown>);
+  if (entries.length === 0) return "{}";
+  
+  return entries
+    .map(([key, value]) => {
+      const formattedValue = typeof value === "object" && value !== null
+        ? formatObject(value, indent + 1)
+        : String(value ?? "");
+      return `${key}: ${formattedValue}`;
+    })
+    .join("\n");
+}
+
+
 function buildBugReportModal(): ModalBuilder {
   const modal = new ModalBuilder()
     .setCustomId(BUGREPORT_MODAL_ID)
@@ -363,8 +569,18 @@ export async function handleBugReportModal(
     );
 
     const report = await generateBugReport(input);
+    
+    // Check if description or title contains a full bug report JSON
+    const extractedFromDescription = extractBugReportFromField(report.description);
+    const extractedFromTitle = extractBugReportFromField(report.title);
+    const extractedReport = extractedFromDescription || extractedFromTitle;
+    
+    // Use extracted report data if found, otherwise use original report
+    const displayReport = extractedReport ? { ...report, ...extractedReport } : report;
+    
+    // Store the displayReport (with extracted data) so reasoning and other fields are available
     const url = buildBugReportUrl(report);
-    const storeId = storeBugReport(report);
+    const storeId = storeBugReport(displayReport);
     const detailsCustomId = buildDetailsCustomId(storeId);
 
     const searchQuery = `${summary} ${detailedDescription}`.slice(0, 200);
@@ -377,17 +593,17 @@ export async function handleBugReportModal(
       ),
       new TextDisplayBuilder().setContent("📋 **Title**"),
       new TextDisplayBuilder().setContent(
-        report.title || "Untitled bug report"
+        formatText(displayReport.title) || "Untitled bug report"
       ),
       new TextDisplayBuilder().setContent("📝 **Description**"),
       new TextDisplayBuilder().setContent(
-        (report.description || "No description provided.").slice(0, 1000)
+        formatText(displayReport.description || "No description provided.", "description").slice(0, 1000)
       ),
     ];
 
-    if (report.stepsToReproduce?.length) {
-      const stepsText = report.stepsToReproduce
-        .map((step, idx) => `${idx + 1}. ${step}`)
+    if (displayReport.stepsToReproduce?.length) {
+      const stepsText = displayReport.stepsToReproduce
+        .map((step, idx) => `${idx + 1}. ${formatText(step)}`)
         .join("\n");
       textDisplays.push(
         new TextDisplayBuilder().setContent("🔢 **Steps to Reproduce**"),
@@ -395,17 +611,17 @@ export async function handleBugReportModal(
       );
     }
 
-    if (report.environment) {
+    if (displayReport.environment) {
       const envParts: string[] = [];
-      if (report.environment.platform)
-        envParts.push(`Platform: ${report.environment.platform}`);
-      if (report.environment.clientType)
-        envParts.push(`Client: ${report.environment.clientType}`);
-      if (report.environment.os) envParts.push(`OS: ${report.environment.os}`);
-      if (report.environment.appVersion)
-        envParts.push(`App Version: ${report.environment.appVersion}`);
-      if (report.environment.clientInfo)
-        envParts.push(`Client Info: ${report.environment.clientInfo}`);
+      if (displayReport.environment.platform)
+        envParts.push(`Platform: ${displayReport.environment.platform}`);
+      if (displayReport.environment.clientType)
+        envParts.push(`Client: ${displayReport.environment.clientType}`);
+      if (displayReport.environment.os) envParts.push(`OS: ${displayReport.environment.os}`);
+      if (displayReport.environment.appVersion)
+        envParts.push(`App Version: ${displayReport.environment.appVersion}`);
+      if (displayReport.environment.clientInfo)
+        envParts.push(`Client Info: ${displayReport.environment.clientInfo}`);
       if (envParts.length) {
         textDisplays.push(
           new TextDisplayBuilder().setContent("💻 **Environment**"),
@@ -415,8 +631,8 @@ export async function handleBugReportModal(
     }
 
     // add reproducibility score
-    if (report.reproducibilityScore !== undefined) {
-      const score = report.reproducibilityScore;
+    if (displayReport.reproducibilityScore !== undefined) {
+      const score = displayReport.reproducibilityScore;
       const scoreEmoji = score >= 70 ? "✅" : score >= 40 ? "⚠️" : "❌";
       textDisplays.push(
         new TextDisplayBuilder().setContent(`${scoreEmoji} **Reproducibility Score: ${score}/100**`)
@@ -502,12 +718,6 @@ export async function handleBugReportModal(
           "Based on your bug report, here are some relevant Discord support articles that might help:"
         ),
       ];
-
-      for (const [idx, { article }] of suggestions.entries()) {
-        suggestionTexts.push(
-          new TextDisplayBuilder().setContent(`${idx + 1}. ${article.title}`)
-        );
-      }
 
       const suggestionsContainer = new ContainerBuilder()
         .setAccentColor(0x57f287)
@@ -646,16 +856,16 @@ export async function handleBugReportDetailsButton(
   }
 
   const lines: string[] = [];
-  lines.push(`**Title:** ${report.title || "Untitled bug report"}`);
+  lines.push(`**Title:** ${formatText(report.title) || "Untitled bug report"}`);
   lines.push("");
   lines.push(`**Summary:**`);
-  lines.push(report.description || "_No description provided._");
+  lines.push(formatText(report.description, "description") || "_No description provided._");
 
   if (report.stepsToReproduce?.length) {
     lines.push("");
     lines.push("**Steps to reproduce:**");
     for (const [idx, step] of report.stepsToReproduce.entries()) {
-      lines.push(`${idx + 1}. ${step}`);
+      lines.push(`${idx + 1}. ${formatText(step)}`);
     }
   }
 
@@ -802,10 +1012,10 @@ export async function handleBugReportFollowupModal(
         "Your bug report has been polished and is ready to submit. Review the details below, then click the button to open Discord's official bug report form with everything pre-filled."
       ),
       new TextDisplayBuilder().setContent("📋 **Title**"),
-      new TextDisplayBuilder().setContent(report.title || "Untitled bug report"),
+      new TextDisplayBuilder().setContent(formatText(report.title) || "Untitled bug report"),
       new TextDisplayBuilder().setContent("📝 **Description**"),
       new TextDisplayBuilder().setContent(
-        (report.description || "No description provided.").slice(0, 1000)
+        formatText(report.description || "No description provided.", "description").slice(0, 1000)
       ),
     ];
 
@@ -907,7 +1117,18 @@ export async function handleBugReportReasoningButton(
     return;
   }
 
-  const reasoningText = report.reasoning || "No reasoning provided by AI.";
+  // Check if reasoning is in the description field's JSON
+  let reasoningText = formatText(report.reasoning);
+  if (!reasoningText || reasoningText === "No reasoning provided by AI.") {
+    // Try to extract from description field if it contains a bug report JSON
+    const extractedFromDescription = extractBugReportFromField(report.description);
+    if (extractedFromDescription?.reasoning) {
+      reasoningText = formatText(extractedFromDescription.reasoning);
+    }
+  }
+  
+  reasoningText = reasoningText || "No reasoning provided by AI.";
+  
   const score = report.reproducibilityScore !== undefined 
     ? `\n\n**Reproducibility Score: ${report.reproducibilityScore}/100**` 
     : "";
@@ -962,9 +1183,9 @@ export async function handleBugReportGenerateAnyways(
           "This report was generated with incomplete information. Please review carefully before submitting."
         ),
         new TextDisplayBuilder().setContent("📋 **Title**"),
-        new TextDisplayBuilder().setContent(report.title || "Untitled"),
+        new TextDisplayBuilder().setContent(formatText(report.title) || "Untitled"),
         new TextDisplayBuilder().setContent("📝 **Description**"),
-        new TextDisplayBuilder().setContent((report.description || "No description").slice(0, 1000))
+        new TextDisplayBuilder().setContent(formatText(report.description || "No description", "description").slice(0, 1000))
       );
 
     const openFormButton = new ButtonBuilder()
